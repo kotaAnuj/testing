@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Create Admin Account</title>
+<link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/css/bootstrap.min.css" rel="stylesheet">
+<link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-analytics-compat.js"></script>
+<script src="firebase-init.js"></script>
+<style>
+body {background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); min-height:100vh; display:flex; align-items:center; justify-content:center; font-family: 'Inter', system-ui, -apple-system, sans-serif;}
+.card {border-radius: 20px; box-shadow: 0 20px 80px rgba(0,0,0,.2);}
+.btn-primary {background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border:none}
+</style>
+</head>
+<body>
+<div class="container py-5">
+  <div class="row justify-content-center">
+    <div class="col-md-6">
+      <div class="card p-4">
+        <div class="text-center mb-3">
+          <i class="fas fa-user-shield fa-2x" style="color:#667eea"></i>
+          <h4 class="mt-2">Create Admin Account</h4>
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Full Name</label>
+          <input type="text" id="reg-name" class="form-control" placeholder="Your name">
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Email</label>
+          <input type="email" id="reg-email" class="form-control" placeholder="you@example.com">
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Password</label>
+          <input type="password" id="reg-password" class="form-control" placeholder="********">
+        </div>
+        <button id="reg-submit" class="btn btn-primary w-100">
+          <i class="fas fa-user-plus me-2"></i>Create Account
+        </button>
+        <div class="text-center mt-3">
+          <a href="index.html" class="small">Back to login</a>
+        </div>
+        <div id="reg-alert" class="alert alert-danger mt-3 d-none"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+	const btn = document.getElementById('reg-submit');
+	const showError = (msg) => {
+		const el = document.getElementById('reg-alert');
+		el.textContent = msg || 'Something went wrong';
+		el.classList.remove('d-none');
+	};
+	btn.addEventListener('click', async () => {
+		const name = document.getElementById('reg-name').value.trim();
+		const email = document.getElementById('reg-email').value.trim();
+		const password = document.getElementById('reg-password').value;
+		if (!name || !email || !password) { showError('Please fill all fields'); return; }
+		if (!window.FirebaseServices || !FirebaseServices.auth || !FirebaseServices.db) { showError('Firebase not initialized'); return; }
+		btn.disabled = true;
+		try {
+			const cred = await FirebaseServices.auth.createUserWithEmailAndPassword(email, password);
+			await FirebaseServices.db.collection('users').doc(cred.user.uid).set({
+				name,
+				email,
+				role: 'admin',
+				createdAt: new Date().toISOString()
+			});
+			try { await cred.user.updateProfile({ displayName: name }); } catch(_){}
+			window.location.href = 'index.html';
+		} catch (e) {
+			showError(e && e.message ? e.message : 'Registration failed');
+			btn.disabled = false;
+		}
+	});
+})();
+</script>
+</body>
+</html>
+
+
+
