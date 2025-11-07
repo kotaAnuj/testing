@@ -1354,5 +1354,389 @@ input[type="file"]::-webkit-file-upload-button:hover {
 <!-- Application Modules -->
 
 <script src="app.js"></script>
+
+<script>
+  // ===================================
+// EDIT FORM FEATURE - APPEND THIS CODE TO app.js
+// ===================================
+// This adds edit functionality for forms (Admin only)
+// No HTML modifications required!
+// ===================================
+
+/**
+ * Opens the form modal in edit mode with existing form data
+ * @param {string} formId - The ID of the form to edit
+ */
+function openEditFormModal(formId) {
+  const form = AppState.forms.find(f => f.id === formId);
+  
+  if (!form) {
+    alert('Form not found');
+    return;
+  }
+
+  // Populate form field dropdown (list of fields to assign form to)
+  populateFormFieldSelect();
+  
+  // Set basic form information
+  document.getElementById('new-form-name').value = form.name;
+  document.getElementById('new-form-desc').value = form.description || '';
+  document.getElementById('new-form-field').value = form.fieldId;
+
+  // Load existing form fields into AppState.formFields for editing
+  AppState.formFields = form.fields.map(field => ({
+    id: field.id,
+    type: field.type,
+    label: field.label,
+    required: field.required || false,
+    placeholder: field.placeholder || '',
+    options: field.options ? [...field.options] : undefined,
+    max: field.max,
+    min: field.min,
+    maxValue: field.maxValue,
+    minLength: field.minLength,
+    maxLength: field.maxLength,
+    accept: field.accept,
+    sectionText: field.sectionText
+  }));
+
+  // Render the fields in the modal
+  renderFormFields();
+
+  // Change modal title and button text for edit mode
+  const modalElement = document.getElementById('formModal');
+  const modalTitle = modalElement.querySelector('.modal-title');
+  const submitBtn = modalElement.querySelector('.modal-footer .btn-primary');
+  
+  if (modalTitle) {
+    modalTitle.innerHTML = '<i class="fas fa-edit me-2"></i>Edit Form';
+  }
+  if (submitBtn) {
+    submitBtn.innerHTML = '<i class="fas fa-save me-2"></i>Save Changes';
+  }
+
+  // Set data attribute to track edit mode (used by createForm to detect edit vs create)
+  modalElement.setAttribute('data-edit-id', formId);
+
+  // Show the modal
+  try {
+    const modal = new bootstrap.Modal(modalElement, {
+      backdrop: 'static',
+      keyboard: true
+    });
+    modal.show();
+  } catch (error) {
+    console.error('Error opening edit form modal:', error);
+    alert('Error opening modal. Please check if Bootstrap is loaded correctly.');
+  }
+}
+
+/**
+ * Enhanced createForm function that handles both create and edit modes
+ * Wraps the original function to add edit functionality
+ */
+const originalCreateForm = createForm;
+createForm = function() {
+  const modal = document.getElementById('formModal');
+  const editId = modal.getAttribute('data-edit-id');
+
+  // Validation (same as original)
+  const validation = validateFormBuilder();
+  if (!validation.isValid) {
+    showValidationErrors(validation.errors);
+    return;
+  }
+
+  const name = document.getElementById('new-form-name').value.trim();
+  const fieldId = document.getElementById('new-form-field').value;
+  const description = document.getElementById('new-form-desc').value.trim();
+
+  if (!name) {
+    alert('Please enter a form name');
+    return;
+  }
+
+  if (!fieldId) {
+    alert('Please select a field for this form');
+    return;
+  }
+
+  if (AppState.formFields.length === 0) {
+    alert('Please add at least one form field');
+    return;
+  }
+
+  // Validate all fields have labels (except section type)
+  const invalidFields = AppState.formFields.filter(f => f.type !== 'section' && !f.label.trim());
+  if (invalidFields.length > 0) {
+    alert('Please provide labels for all form fields');
+    return;
+  }
+
+  // Validate fields with options have at least one option
+  const invalidOptionFields = AppState.formFields.filter(f => 
+    (f.type === 'select' || f.type === 'radio' || f.type === 'multiselect') && 
+    (!f.options || f.options.length === 0 || f.options.every(opt => !opt.trim()))
+  );
+  
+  if (invalidOptionFields.length > 0) {
+    alert('Please provide at least one option for dropdown, radio, and multiselect fields');
+    return;
+  }
+
+  if (editId) {
+    // ===================================
+    // EDIT EXISTING FORM MODE
+    // ===================================
+    const form = AppState.forms.find(f => f.id === editId);
+    
+    if (!form) {
+      alert('Form not found. Please try again.');
+      closeFormModalForEdit();
+      return;
+    }
+
+    // Store old fieldId to check if it changed
+    const oldFieldId = form.fieldId;
+
+    // Update form properties
+    form.name = name;
+    form.fieldId = fieldId;
+    form.description = description;
+    
+    // Update form fields with all their properties
+    form.fields = AppState.formFields.map(f => {
+      const base = { 
+        id: f.id, 
+        type: f.type, 
+        label: f.label, 
+        required: !!f.required 
+      };
+      
+      // Add optional properties only if they exist
+      if (f.placeholder) base.placeholder = f.placeholder;
+      if (f.type === 'section' && f.sectionText) base.sectionText = f.sectionText;
+      if ((f.type === 'select' || f.type === 'radio' || f.type === 'multiselect') && f.options) {
+        base.options = f.options.filter(opt => opt.trim()).slice();
+      }
+      if (f.type === 'rating') base.max = typeof f.max === 'number' ? f.max : 5;
+      if (f.type === 'number') {
+        if (f.min !== undefined) base.min = f.min;
+        if (f.maxValue !== undefined) base.max = f.maxValue;
+      }
+      if (f.type === 'textarea') {
+        if (f.minLength !== undefined) base.minLength = f.minLength;
+        if (f.maxLength !== undefined) base.maxLength = f.maxLength;
+      }
+      if (f.type === 'file' && f.accept) base.accept = f.accept;
+      
+      return base;
+    });
+
+    // Update timestamp
+    form.updatedAt = new Date().toISOString();
+
+    // Persist to Firestore
+    if (window.FirebaseServices && FirebaseServices.db) {
+      const formForDb = sanitizeForFirestore(form);
+      FirebaseServices.db.collection('forms').doc(form.id)
+        .set(formForDb)
+        .then(() => {
+          console.log('Form updated successfully in Firestore');
+        })
+        .catch(err => {
+          console.error('Error updating form in Firestore:', err);
+          alert('Warning: Form updated locally but failed to sync to database.');
+        });
+    }
+
+    // Close modal and cleanup
+    closeFormModalForEdit();
+
+    // Update UI based on current view
+    if (AppState.currentFieldId) {
+      // If we're viewing a field, refresh that field view
+      showFieldDetail(AppState.currentFieldId);
+    } else {
+      // Otherwise show all forms
+      showAllForms();
+    }
+    
+    // Show the updated form detail
+    showFormDetail(editId);
+    
+    alert('Form updated successfully!');
+
+  } else {
+    // ===================================
+    // CREATE NEW FORM MODE (Original behavior)
+    // ===================================
+    originalCreateForm();
+  }
+};
+
+/**
+ * Closes the form modal and resets it to create mode
+ * This ensures the modal is clean for the next use
+ */
+function closeFormModalForEdit() {
+  const modal = document.getElementById('formModal');
+  
+  if (!modal) return;
+
+  try {
+    const bsModal = bootstrap.Modal.getInstance(modal);
+    if (bsModal) {
+      bsModal.hide();
+    }
+  } catch (error) {
+    console.error('Error closing modal:', error);
+  }
+
+  // Reset form fields
+  document.getElementById('new-form-name').value = '';
+  document.getElementById('new-form-desc').value = '';
+  document.getElementById('new-form-field').value = '';
+  
+  // Clear form fields array
+  AppState.formFields = [];
+  document.getElementById('form-fields-container').innerHTML = '';
+  
+  // Reset modal to create mode
+  modal.removeAttribute('data-edit-id');
+  const modalTitle = modal.querySelector('.modal-title');
+  const submitBtn = modal.querySelector('.modal-footer .btn-primary');
+  
+  if (modalTitle) {
+    modalTitle.innerHTML = '<i class="fas fa-file-alt me-2"></i>Create Form';
+  }
+  if (submitBtn) {
+    submitBtn.innerHTML = '<i class="fas fa-check me-2"></i>Create Form';
+  }
+  
+  // Remove any validation error messages
+  const existingAlert = modal.querySelector('.alert');
+  if (existingAlert) existingAlert.remove();
+  
+  // Update field count badge
+  if (typeof updateFieldCountBadge === 'function') {
+    updateFieldCountBadge();
+  }
+}
+
+/**
+ * COMPLETE OVERRIDE of showFormDetail to add Edit button
+ * This function displays form details with Edit, Export, and Delete buttons
+ * ADMIN ONLY - Agents never access this function
+ */
+showFormDetail = function(formId) {
+  AppState.currentFormId = formId;
+  const form = AppState.forms.find(f => f.id === formId);
+  if (!form) return;
+
+  const formSubmissions = AppState.submissions.filter(s => s.formId === formId);
+  
+  const content = `
+    <div class="top-bar">
+      <h4 class="mb-0"><i class="fas fa-file-alt me-2"></i>${form.name}</h4>
+      <div class="ms-auto d-flex gap-2">
+        <button class="btn btn-outline-primary btn-sm" onclick="openEditFormModal('${formId}')">
+          <i class="fas fa-edit me-2"></i>Edit Form
+        </button>
+        <button class="btn btn-outline-primary btn-sm" onclick="exportFormData('${formId}')">
+          <i class="fas fa-download me-2"></i>Export
+        </button>
+        <button class="btn btn-outline-danger btn-sm" onclick="deleteForm('${formId}')">
+          <i class="fas fa-trash me-2"></i>Delete
+        </button>
+      </div>
+    </div>
+
+    <div class="form-card">
+      <h5><i class="fas fa-info-circle me-2"></i>Form Details</h5>
+      <p class="text-muted">${form.description || 'No description'}</p>
+      <div class="mt-3">
+        <strong>Total Fields:</strong> ${form.fields.length}<br>
+        <strong>Total Submissions:</strong> ${formSubmissions.length}
+      </div>
+    </div>
+
+    <div class="form-card">
+      <h5 class="mb-3"><i class="fas fa-list me-2"></i>Form Fields (${form.fields.length})</h5>
+      <div class="table-responsive">
+        <table class="table">
+          <thead>
+            <tr>
+              <th>Label</th>
+              <th>Type</th>
+              <th>Required</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${form.fields.map(field => `
+              <tr>
+                <td><strong>${field.label}</strong></td>
+                <td><span class="badge bg-secondary">${field.type}</span></td>
+                <td>${field.required ? '<i class="fas fa-check text-success"></i>' : '<i class="fas fa-times text-muted"></i>'}</td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="spreadsheet-container">
+      <div class="spreadsheet-toolbar">
+        <h5 class="mb-0"><i class="fas fa-table me-2"></i>Form Submissions (${formSubmissions.length})</h5>
+      </div>
+      ${formSubmissions.length === 0 ? 
+        '<div class="p-4 text-center text-muted">No submissions yet</div>' :
+        `<div style="overflow-x: auto;">
+          <table class="spreadsheet-table">
+            <thead>
+              <tr>
+                <th>Submission ID</th>
+                <th>Agent</th>
+                <th>Submitted At</th>
+                ${form.fields.map(f => `<th>${f.label}</th>`).join('')}
+              </tr>
+            </thead>
+            <tbody>
+              ${formSubmissions.map(sub => {
+                const agent = AppState.agents.find(a => a.id === sub.agentId);
+                return `
+                  <tr>
+                    <td>${sub.id}</td>
+                    <td>${agent ? agent.name : 'Unknown'}</td>
+                    <td>${new Date(sub.submittedAt).toLocaleString()}</td>
+                    ${form.fields.map(f => `<td>${sub.data[f.id] || '-'}</td>`).join('')}
+                  </tr>
+                `;
+              }).join('')}
+            </tbody>
+          </table>
+        </div>`
+      }
+    </div>
+  `;
+
+  document.getElementById('admin-content').innerHTML = content;
+};
+
+// ===================================
+// CONSOLE LOG TO CONFIRM FEATURE LOADED
+// ===================================
+console.log('✅ Edit Form Feature loaded successfully!');
+console.log('📝 Admin can now edit existing forms');
+console.log('🔒 Agent access: Read-only (no edit capability)');
+console.log('');
+console.log('Usage:');
+console.log('1. Navigate to any form (Dashboard → Field → Form)');
+console.log('2. Click "Edit Form" button');
+console.log('3. Modify form fields and settings');
+console.log('4. Click "Save Changes"');
+console.log('');
+</script>  
 </body>
+
 </html>
