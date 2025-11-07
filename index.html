@@ -1097,21 +1097,19 @@ input[type="file"]::-webkit-file-upload-button:hover {
 </div>
 
 <!-- Modals -->
-<!-- Form Preview Modal -->
-<div class="modal fade" id="formPreviewModal" tabindex="-1">
+<!-- Modal with inline CSS -->
+<div class="modal fade" id="formPreviewModal" tabindex="-1" style="z-index: 9999 !important;">
   <div class="modal-dialog modal-lg modal-dialog-scrollable">
     <div class="modal-content">
       <div class="modal-header">
-        <h5 class="modal-title">
-          <i class="fas fa-eye me-2"></i>Form Preview
-        </h5>
-        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        <h5 class="modal-title">Form Preview</h5>
+        <button type="button" class="btn-close" onclick="closePreview()" aria-label="Close"></button>
       </div>
-      <div class="modal-body">
-        <div id="form-preview-content"></div>
+      <div class="modal-body" id="form-preview-content">
+        <!-- Preview content will be inserted here -->
       </div>
       <div class="modal-footer">
-        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+        <button type="button" class="btn btn-secondary" onclick="closePreview()">Close</button>
       </div>
     </div>
   </div>
@@ -1354,7 +1352,6 @@ input[type="file"]::-webkit-file-upload-button:hover {
 <!-- Application Modules -->
 
 <script src="app.js"></script>
-
 <script>
   // ===================================
 // EDIT FORM FEATURE - APPEND THIS CODE TO app.js
@@ -1736,7 +1733,6 @@ console.log('2. Click "Edit Form" button');
 console.log('3. Modify form fields and settings');
 console.log('4. Click "Save Changes"');
 console.log('');
-</script>  
+</script>
 </body>
-
 </html>
