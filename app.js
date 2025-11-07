@@ -2772,7 +2772,6 @@ setInterval(saveToStorage, 5000); // Save every 5 seconds
 */
 
 
-
 function previewForm() {
   if (AppState.formFields.length === 0) {
     alert('Please add at least one field to preview');
@@ -2782,6 +2781,7 @@ function previewForm() {
   const formName = document.getElementById('new-form-name').value.trim() || 'Untitled Form';
   const formDesc = document.getElementById('new-form-desc').value.trim();
 
+  // Create preview content
   const previewContent = `
     <div class="p-3">
       <h4 class="mb-2">${formName}</h4>
@@ -2795,8 +2795,50 @@ function previewForm() {
 
   document.getElementById('form-preview-content').innerHTML = previewContent;
   
-  const modal = new bootstrap.Modal(document.getElementById('formPreviewModal'));
+  // Get the modal element and force high z-index
+  const modalElement = document.getElementById('formPreviewModal');
+  modalElement.style.cssText = 'z-index: 9999 !important;';
+  
+  // Create or get existing modal instance
+  let modal = bootstrap.Modal.getInstance(modalElement);
+  if (!modal) {
+    modal = new bootstrap.Modal(modalElement, {
+      backdrop: true,
+      keyboard: true,
+      focus: true
+    });
+  }
+  
+  // Fix backdrop z-index after modal is shown
+  modalElement.addEventListener('shown.bs.modal', function() {
+    const backdrop = document.querySelector('.modal-backdrop.show');
+    if (backdrop) {
+      backdrop.style.cssText = 'z-index: 9998 !important;';
+    }
+  }, { once: true });
+  
   modal.show();
+}
+
+// Close function without clearing data
+function closePreview() {
+  const modalElement = document.getElementById('formPreviewModal');
+  const modal = bootstrap.Modal.getInstance(modalElement);
+  
+  if (modal) {
+    modal.hide();
+  }
+  
+  // Clean up backdrop
+  setTimeout(() => {
+    const backdrop = document.querySelector('.modal-backdrop');
+    if (backdrop) {
+      backdrop.remove();
+    }
+    document.body.classList.remove('modal-open');
+    document.body.style.removeProperty('overflow');
+    document.body.style.removeProperty('padding-right');
+  }, 300);
 }
 
 
@@ -3084,3 +3126,10 @@ document.addEventListener('DOMNodeInserted', function (event) {
     }
   }
 });
+
+
+
+
+
+
+
